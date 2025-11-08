@@ -4,3 +4,4 @@ youtube-transcript-api
 google-generativeai
 python-dotenv
 fpdf2
+markdown-it-py

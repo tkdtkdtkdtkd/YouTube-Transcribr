@@ -8,6 +8,10 @@ import time
 import random
 from fpdf import FPDF
 import io
+from markdown_it import MarkdownIt
+
+# Initialize the Markdown parser
+md = MarkdownIt()
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -17,7 +21,6 @@ st.set_page_config(
 )
 
 # --- 1. CORE HELPER FUNCTIONS (Your YouTube Code) ---
-# (We don't need dotenv or os here, Streamlit handles secrets)
 
 def clean_transcript_basic(text):
     """
@@ -43,7 +46,6 @@ def clean_transcript_basic(text):
     text = re.sub(r'([,.!?])(\w)', r'\1 \2', text)
     return text
 
-# MODIFIED: Renamed to get_channel_videos and max_results is now 25
 @st.cache_data(show_spinner="Searching for channel videos...")
 def get_channel_videos(api_key, channel_name, max_results=25):
     """
@@ -93,7 +95,6 @@ def get_channel_videos(api_key, channel_name, max_results=25):
         st.error(f"Error accessing YouTube API: {e}")
         return []
 
-# MODIFIED: Takes a list of video_ids, returns a dictionary
 @st.cache_data(show_spinner="Fetching transcripts...")
 def get_transcripts_for_videos(video_ids_to_fetch):
     """
@@ -122,33 +123,6 @@ def get_transcripts_for_videos(video_ids_to_fetch):
 # --- 2. CORE HELPER FUNCTIONS (Your Gemini Code) ---
 
 # This function combines both your Gemini scripts
-# --- 2. CORE HELPER FUNCTIONS (Your Gemini Code) ---
-
-def strip_markdown(text):
-    """
-    Strips common Markdown formatting from a string.
-    """
-    # Remove bold (**text**) and italic (*text* or _text_)
-    text = re.sub(r'[\*_]{1,2}(.*?)[\*_]{1,2}', r'\1', text)
-    
-    # Remove headings (## text)
-    text = re.sub(r'^#+\s*(.*?)\s*#*$', r'\1', text, flags=re.MULTILINE)
-    
-    # Remove bullet points (* text or - text)
-    text = re.sub(r'^\s*[\*\-]\s+', '', text, flags=re.MULTILINE)
-    
-    # Remove inline code (`text`)
-    text = re.sub(r'`(.*?)`', r'\1', text)
-    
-    # Remove links [text](url), keeping only the text
-    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
-    
-    # Remove horizontal rules (---, ***, ___)
-    text = re.sub(r'^\s*[-_\*]{3,}\s*$', '', text, flags=re.MULTILINE)
-    
-    return text.strip()
-
-# This function combines both your Gemini scripts
 def run_gemini_model(transcript_text, system_prompt, gemini_api_key):
     """
     A single function to run a Gemini model with a specific system prompt.
@@ -159,9 +133,7 @@ def run_gemini_model(transcript_text, system_prompt, gemini_api_key):
         model = genai.GenerativeModel("models/gemini-pro-latest")
         full_prompt = f"{system_prompt}\n\nHere is the text:\n---\n{transcript_text}\n---"
         
-        # --- THIS IS THE FIX ---
-        # Set a high output token limit to ensure it processes the
-        # entire transcript and doesn't just stop at the intro.
+        # Set a high output token limit
         gen_config = {
             "max_output_tokens": 9999999
         }
@@ -170,7 +142,6 @@ def run_gemini_model(transcript_text, system_prompt, gemini_api_key):
             full_prompt,
             generation_config=gen_config # Pass the config here
         )
-        # --- END OF FIX ---
         
         return response.text
     except Exception as e:
@@ -202,8 +173,6 @@ EXPLAINER_PROMPT = "make detailed points out of this, do not skip details and in
 
 # --- 3. FORMATTING AND PDF FUNCTIONS ---
 
-# --- 3. FORMATTING AND PDF FUNCTIONS ---
-
 def format_original_transcript(transcript_list):
     """
     Takes the raw transcript list and formats it into
@@ -211,8 +180,7 @@ def format_original_transcript(transcript_list):
     """
     cleaned_snippets = []
     for snippet in transcript_list:
-        # --- FIXED: Use dot notation (snippet.text) instead of brackets ---
-        cleaned_text = clean_transcript_basic(snippet.text)
+        cleaned_text = clean_transcript_basic(snippet['text']) # Fixed: Use brackets for dict
         cleaned_snippets.append(cleaned_text)
     
     paragraphs = []
@@ -226,7 +194,7 @@ def format_original_transcript(transcript_list):
 # This is the PDF generation function
 class PDF(FPDF):
     def header(self):
-        self.set_font('DejaVu', 'B', 12) # Use DejaVu for UTF-8
+        self.set_font('DejaVu', 'B', 12)
         self.cell(0, 10, 'Transcribrr 🚀', 0, 1, 'C')
 
     def chapter_title(self, title):
@@ -235,8 +203,11 @@ class PDF(FPDF):
         self.ln(5)
 
     def chapter_body(self, text):
-        self.set_font('DejaVu', '', 10)
-        self.multi_cell(0, 5, text)
+        # 1. Convert the Markdown text to HTML
+        html = md.render(text)
+        
+        # 2. Use the .write_html() method to render it
+        self.write_html(html)
         self.ln()
 
 def create_pdf_from_transcripts(processed_transcripts):
@@ -253,8 +224,7 @@ def create_pdf_from_transcripts(processed_transcripts):
         pdf.chapter_title(title)
         pdf.chapter_body(text)
         
-    # --- FIXED: Explicitly convert the bytearray output to bytes ---
-    # This is what st.download_button expects.
+    # Explicitly convert the bytearray output to bytes
     return bytes(pdf.output(dest='S'))
 
 # --- 4. THE STREAMLIT APP UI ---
@@ -323,9 +293,7 @@ if st.session_state.video_list:
     if submit_button:
         # Get list of videos to fetch (id, title)
         
-        # --- THIS IS THE CORRECTED LOGIC ---
         selected_videos = []
-        # We must iterate over the video_list to get the titles
         for video_data in st.session_state.video_list:
             video_id = video_data['video_id']
             video_title = video_data['title']
@@ -333,7 +301,6 @@ if st.session_state.video_list:
             # Check if this video_id is in our checkbox selections and if it's True
             if video_id in video_selections and video_selections[video_id] is True:
                 selected_videos.append((video_id, video_title))
-        # --- END OF CORRECTION ---
 
         if not selected_videos:
             st.warning("Please select at least one video.")
@@ -358,13 +325,13 @@ if st.session_state.video_list:
                     
                     elif format_option == "Brainrot Transcript (Gen Z)":
                         st.text(f"Running 'Brainrot' model on: {data['title']}...")
-                        raw_ai_text = run_gemini_model(original_formatted_text, BRAINROT_PROMPT, GEMINI_KEY)
-                        final_text = strip_markdown(raw_ai_text) # <-- CLEAN THE TEXT
+                        # --- FIX: Pass the raw AI text directly ---
+                        final_text = run_gemini_model(original_formatted_text, BRAINROT_PROMPT, GEMINI_KEY)
                     
                     elif format_option == "AI Explainer (Detailed Notes)":
                         st.text(f"Running 'AI Explainer' model on: {data['title']}...")
-                        raw_ai_text = run_gemini_model(original_formatted_text, EXPLAINER_PROMPT, GEMINI_KEY)
-                        final_text = strip_markdown(raw_ai_text) # <-- CLEAN THE TEXT
+                        # --- FIX: Pass the raw AI text directly ---
+                        final_text = run_gemini_model(original_formatted_text, EXPLAINER_PROMPT, GEMINI_KEY)
                     
                     processed_transcripts.append((title, final_text))
                 
