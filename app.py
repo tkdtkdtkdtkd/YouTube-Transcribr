@@ -124,6 +124,30 @@ def get_transcripts_for_videos(video_ids_to_fetch):
 # This function combines both your Gemini scripts
 # --- 2. CORE HELPER FUNCTIONS (Your Gemini Code) ---
 
+def strip_markdown(text):
+    """
+    Strips common Markdown formatting from a string.
+    """
+    # Remove bold (**text**) and italic (*text* or _text_)
+    text = re.sub(r'[\*_]{1,2}(.*?)[\*_]{1,2}', r'\1', text)
+    
+    # Remove headings (## text)
+    text = re.sub(r'^#+\s*(.*?)\s*#*$', r'\1', text, flags=re.MULTILINE)
+    
+    # Remove bullet points (* text or - text)
+    text = re.sub(r'^\s*[\*\-]\s+', '', text, flags=re.MULTILINE)
+    
+    # Remove inline code (`text`)
+    text = re.sub(r'`(.*?)`', r'\1', text)
+    
+    # Remove links [text](url), keeping only the text
+    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
+    
+    # Remove horizontal rules (---, ***, ___)
+    text = re.sub(r'^\s*[-_\*]{3,}\s*$', '', text, flags=re.MULTILINE)
+    
+    return text.strip()
+
 # This function combines both your Gemini scripts
 def run_gemini_model(transcript_text, system_prompt, gemini_api_key):
     """
@@ -334,11 +358,13 @@ if st.session_state.video_list:
                     
                     elif format_option == "Brainrot Transcript (Gen Z)":
                         st.text(f"Running 'Brainrot' model on: {data['title']}...")
-                        final_text = run_gemini_model(original_formatted_text, BRAINROT_PROMPT, GEMINI_KEY)
+                        raw_ai_text = run_gemini_model(original_formatted_text, BRAINROT_PROMPT, GEMINI_KEY)
+                        final_text = strip_markdown(raw_ai_text) # <-- CLEAN THE TEXT
                     
                     elif format_option == "AI Explainer (Detailed Notes)":
                         st.text(f"Running 'AI Explainer' model on: {data['title']}...")
-                        final_text = run_gemini_model(original_formatted_text, EXPLAINER_PROMPT, GEMINI_KEY)
+                        raw_ai_text = run_gemini_model(original_formatted_text, EXPLAINER_PROMPT, GEMINI_KEY)
+                        final_text = strip_markdown(raw_ai_text) # <-- CLEAN THE TEXT
                     
                     processed_transcripts.append((title, final_text))
                 
