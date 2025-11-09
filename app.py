@@ -175,23 +175,35 @@ EXPLAINER_PROMPT = "make detailed points out of this, do not skip details and in
 
 # --- 3A: Standard PDF (FPDF) Functions ---
 
+#
+# --------------------------------------------------------------------
+#  THIS IS THE FUNCTION THAT WAS FIXED
+# --------------------------------------------------------------------
+#
 def format_original_transcript(transcript_list):
     """
     Takes the raw transcript list and formats it into
-    4-snippet paragraphs.
+    a single, cleaned block of text.
     """
-    cleaned_snippets = []
-    for snippet in transcript_list:
-        cleaned_text = clean_transcript_basic(snippet['text']) # Fixed: Use brackets for dict
-        cleaned_snippets.append(cleaned_text)
+    # 1. Get all text snippets
+    all_text_snippets = [snippet['text'] for snippet in transcript_list]
     
-    paragraphs = []
-    chunk_size = 4 
-    for i in range(0, len(cleaned_snippets), chunk_size):
-        chunk = cleaned_snippets[i:i + chunk_size]
-        paragraphs.append(' '.join(chunk))
+    # 2. Join them all with a single space
+    full_transcript = ' '.join(all_text_snippets)
     
-    return '\n\n'.join(paragraphs)
+    # 3. Clean the ENTIRE block at once
+    # This fixes contractions and spacing (e.g., "I'm" and "word .")
+    cleaned_full_transcript = clean_transcript_basic(full_transcript)
+    
+    # 4. Return the single, continuous block of text.
+    # The PDF engine (FPDF) will handle wrapping this text.
+    return cleaned_full_transcript
+#
+# --------------------------------------------------------------------
+#  END OF FIXED FUNCTION
+# --------------------------------------------------------------------
+#
+
 
 class PDF(FPDF):
     """
@@ -208,6 +220,7 @@ class PDF(FPDF):
 
     def chapter_body(self, text):
         # 1. Convert the Markdown text to HTML using markdown-it
+        # Note: A single block of text will be wrapped in <p>...</p>
         html = md_fpdf.render(text)
         
         # 2. Use the FPDF .write_html() method to render it
@@ -525,6 +538,7 @@ if st.session_state.video_list:
                 
                 for video_id, data in raw_transcripts.items():
                     # 2. Format as "Original" first
+                    # THIS WILL NOW USE THE FIXED FUNCTION
                     original_formatted_text = format_original_transcript(data['transcript_list'])
                     
                     final_text = ""
