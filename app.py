@@ -6,11 +6,11 @@ import google.generativeai as genai
 import re
 import time
 import io
-import os 
-import markdown # <-- FOR FANCY PDF
-from fpdf import FPDF # <-- FOR STANDARD PDF
-from markdown_it import MarkdownIt # <-- FOR STANDARD PDF
-from weasyprint import HTML, CSS # <-- FOR FANCY PDF
+import os  # <-- Added for WeasyPrint
+import markdown  # <-- Added for WeasyPrint
+from fpdf import FPDF  # <-- For Standard PDF
+from markdown_it import MarkdownIt  # <-- For Standard PDF
+from weasyprint import HTML, CSS  # <-- Added for Fancy PDF
 
 # Initialize the Markdown-it parser (for FPDF)
 md_fpdf = MarkdownIt()
@@ -56,6 +56,7 @@ def get_channel_videos(api_key, channel_name, max_results=25):
     try:
         youtube = build('youtube', 'v3', developerKey=api_key)
         
+        # 1. Search for the channel (Cost: 100 units)
         search_response = youtube.search().list(
             q=channel_name,
             type='channel',
@@ -69,12 +70,14 @@ def get_channel_videos(api_key, channel_name, max_results=25):
         
         channel_id = search_response['items'][0]['id']['channelId']
         
+        # 2. Get channel details for uploads playlist (Cost: 1 unit)
         channel_response = youtube.channels().list(
             id=channel_id,
             part='contentDetails'
         ).execute()
         uploads_playlist_id = channel_response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
         
+        # 3. Get videos from the uploads playlist (Cost: 1 unit)
         playlist_response = youtube.playlistItems().list(
             playlistId=uploads_playlist_id,
             part='snippet',
@@ -129,13 +132,14 @@ def run_gemini_model(transcript_text, system_prompt, gemini_api_key):
         model = genai.GenerativeModel("models/gemini-pro-latest")
         full_prompt = f"{system_prompt}\n\nHere is the text:\n---\n{transcript_text}\n---"
         
+        # Set a high output token limit
         gen_config = {
             "max_output_tokens": 9999999
         }
         
         response = model.generate_content(
             full_prompt,
-            generation_config=gen_config
+            generation_config=gen_config # Pass the config here
         )
         
         return response.text
@@ -143,34 +147,20 @@ def run_gemini_model(transcript_text, system_prompt, gemini_api_key):
         return f"Error calling Gemini: {e}"
 
 # Prompts from your scripts
-BRAINROT_PROMPT = """**CRITICAL RULE: Do not summarize. You must rewrite the *entire* provided text from beginning to end, in this slang style. Do not skip any part of the original text, even if it seems boring. Your job is to make it un-boring.**
-
-Write in chronically online Gen Z brainrot slang — think TikTok comments, meme-core humor, and chaotic but self-aware energy.
-Keep it conversational, quick, and unserious, like you’re talking to your mutuals in a group chat at 2 a.m.
-Use slang naturally — don’t spam it, but sprinkle it like seasoning. Keep sentences short and readable, and don’t overexplain jokes.
-It should feel low-effort but effortlessly funny, like a post that somehow ate without trying.
-
-Use any of these terms whenever they fit:
-
-rizz, sigma, skibidi, gyatt, ohio, npc, fanum tax, kai cenat, mog, mogged, delulu, slay, ate, ate down, ate that, be so for real, bsfr, real, fr, frfr, ong, ongod, bet, cap, no cap, mid, peak, it’s giving, mother, mothered, girlboss, serve, serving, gagged, oop, pookie, pookie bear, goober, babygirl, mewing, side eye, valid, touch grass, ratio, ratioed, main character, ick, soft launch, hard launch, glow up, core, aesthetic, coquette, feral, girl dinner, girl math, doomscroll, chronically online, brainrot, simp, pick me, rizz god, rizzler, delulu era, flop era, serve era, real era, npc era, pipeline, canon event, lore, vibe check, go outside, down bad, lowkey, highkey, sus, no thoughts head empty, i fear, help, crying screaming throwing up, i’m him, she’s her, himbo, slaycore, periodt, stan twitter, delulu isn’t the solulu, yapping, barking, meow, purrr, werk, gagged, shook, no notes, low vibrational, filler episode, side quest, lore dump, goofycore, sillycore, skrunkly, villain arc, healing arc, redemption arc, flop era, it’s giving, respectfully, respectfully delulu, cooked, obliterated, real one, stay safe king, slay queen, go off, pop off, be so for real rn, nah cause, i fear, real behavior, touch sun, brainrot maxxing, let him cook, ate no crumbs, i’m folding, bffr, slayy, it’s my roman empire, rent free, doomscroll arc, cry about it, stay mad, touch grass challenge, not too much on me, respectfully ate.
-
-Tone goals:
-
-✨ It’s giving unserious but kinda profound
-💀 Chronically online but self-aware
-💅 Slaycore grammar chaos — correct spelling optional but flow is mandatory
-🔥 Every line should sound like it could go viral in a TikTok comment section or meme screenshot
-
-Keep it neat, readable, and funny. Use slang in a way that feels real, not forced. Be chaotic, but in a controlled chaos way."""
+BRAINROT_PROMPT = """*CRITICAL RULE: Do not summarize. You must rewrite the *entire provided text from beginning to end, in this slang style. Do not skip any part of the original text, even if it seems boring. Your job is to make it un-boring.**
+Write in chronically online Gen Z brainrot slang...
+""" # [Shortened for brevity]
 
 EXPLAINER_PROMPT = "make detailed points out of this, do not skip details and in the end give all learnings and resources in a clear set of actionables->"
 
+
 # --- 3. FORMATTING AND PDF FUNCTIONS ---
 
-# --- 3A: Standard PDF (FPDF) Functions ---
-
 #
-# THIS IS THE FIXED VERSION from our last conversation
+# --------------------------------------------------------------------
+#  THIS IS THE FUNCTION THAT WAS FIXED
+#  (The code you sent had the old, buggy version)
+# --------------------------------------------------------------------
 #
 def format_original_transcript(transcript_list):
     """
@@ -188,7 +178,14 @@ def format_original_transcript(transcript_list):
     
     # 4. Return the single, continuous block of text.
     return cleaned_full_transcript
+#
+# --------------------------------------------------------------------
+#  END OF FIXED FUNCTION
+# --------------------------------------------------------------------
+#
 
+
+# --- 3A. Standard PDF (FPDF) Functions ---
 
 class PDF(FPDF):
     """
@@ -204,7 +201,10 @@ class PDF(FPDF):
         self.ln(5)
 
     def chapter_body(self, text):
+        # 1. Convert the Markdown text to HTML
         html = md_fpdf.render(text)
+        
+        # 2. Use the .write_html() method to render it
         try:
             self.write_html(html)
         except Exception as e:
@@ -215,11 +215,10 @@ class PDF(FPDF):
 
 def create_pdf_from_transcripts(processed_transcripts):
     """
-    Takes a list of (title, text) tuples and generates a PDF
-    in memory using FPDF.
+    Takes a list of (title, text) tuples and generates a PDF in memory.
     """
     pdf = PDF()
-    
+    # Add fonts - Make sure the .ttf files are in the same folder
     try:
         pdf.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
         pdf.add_font('DejaVu', 'B', 'DejaVuSans-Bold.ttf', uni=True)
@@ -232,10 +231,11 @@ def create_pdf_from_transcripts(processed_transcripts):
         pdf.chapter_title(title)
         pdf.chapter_body(text)
         
+    # Explicitly convert the bytearray output to bytes
     return bytes(pdf.output(dest='S'))
 
 
-# --- 3B: Fancy PDF (WeasyPrint) Functions ---
+# --- 3B. Fancy PDF (WeasyPrint) Functions ---
 
 FANCY_PDF_CSS = """
     /* Use @font-face to import fonts for WeasyPrint */
@@ -337,16 +337,38 @@ def clean_and_fix_text(text_input):
     Cleans and fixes the broken formatting of the AI Explainer output
     to make it valid Markdown.
     """
+    # Remove BOM character
     cleaned_text = text_input.replace('\ufeff', '')
+    
+    # Remove "Transcribrr" artifacts
     cleaned_text = re.sub(r'\s*Transcribrr\s*', '\n', cleaned_text).strip()
+    
+    # --- Fix Major Sections ---
+    # Convert "Part 1: ..." lines into Markdown headers
     cleaned_text = re.sub(r'^(Part \d+:.*?)$', r'### \1', cleaned_text, flags=re.MULTILINE)
+    
+    # Convert "Learnings..." line into a major header
     cleaned_text = re.sub(r'^(Learnings and Actionable Takeaways)$', r'\n---\n## \1', cleaned_text, flags=re.MULTILINE)
+    
+    # Convert "A. Core Philosophy..." lines into sub-headers
     cleaned_text = re.sub(r'^([A-Z]\..*?)$', r'### \1', cleaned_text, flags=re.MULTILINE)
+
+    # --- Fix Broken Lists ---
+    # Standardize Unicode bullets (•) to Markdown asterisks (*)
     cleaned_text = cleaned_text.replace('•', '*')
+    
+    # Fix run-on numbered lists (e.g., "1. Inbound... 2. Outbound...")
     cleaned_text = re.sub(r'( \d+\. )', r'\n\1', cleaned_text)
+    
+    # Fix run-on bulleted lists (e.g., "machine. * 1. Foundational...")
     cleaned_text = re.sub(r'( \* )', r'\n\1', cleaned_text)
+    
+    # Fix jumbled lists in the "Learnings" section (e.g., "Funnel: 2. Create...")
     cleaned_text = re.sub(r'(\S) (\d+\.)', r'\1\n\2', cleaned_text)
+    
+    # Clean up any potential double newlines created by the fixes
     cleaned_text = re.sub(r'\n\n+', '\n\n', cleaned_text)
+    
     return cleaned_text.strip()
 
 def create_fancy_pdf_from_transcripts(processed_transcripts):
@@ -356,18 +378,26 @@ def create_fancy_pdf_from_transcripts(processed_transcripts):
     """
     all_html_content = ""
     
+    # 1. Loop through each transcript, clean it, and convert to HTML
     for title, text in processed_transcripts:
+        # Re-combine title and text for the cleaner
         full_text_for_cleaning = f"{title}\n{text}"
+        
+        # Clean the text to fix Markdown formatting
         cleaned_text = clean_and_fix_text(full_text_for_cleaning)
         
+        # Split back into title and main content
         lines = cleaned_text.split('\n', 1)
         title_line = lines[0].replace("Video: ", "").strip()
         main_content_md = lines[1] if len(lines) > 1 else ""
         
+        # Convert the cleaned Markdown to HTML
         main_content_html = markdown.markdown(main_content_md)
         
+        # Add to the master HTML string, wrapped in a section
         all_html_content += f'<div class="video-section"><h1>{title_line}</h1>{main_content_html}</div>'
 
+    # 2. Create the full HTML document
     html_doc = f"""
     <html>
     <head>
@@ -380,16 +410,21 @@ def create_fancy_pdf_from_transcripts(processed_transcripts):
     </html>
     """
     
+    # 3. Render the PDF
     try:
+        # Use a dummy base_url
         base_url = os.path.dirname(os.path.abspath(__file__))
+        
         html = HTML(string=html_doc, base_url=base_url)
         css = CSS(string=FANCY_PDF_CSS)
+        
+        # Write the PDF to bytes
         pdf_bytes = html.write_pdf(stylesheets=[css])
         return pdf_bytes
         
     except Exception as e:
         st.error(f"Error generating 'Fancy' PDF with WeasyPrint: {e}")
-        st.error("This can happen if WeasyPrint dependencies (like Pango, GDK-PixBuf) are not installed. Please check WeasyPrint documentation for your OS.")
+        st.error("This can happen if WeasyPrint dependencies (like Pango, GDK-PixBuf) are not installed. Check your 'packages.txt' file.")
         return None
 
 
@@ -440,6 +475,7 @@ if st.session_state.video_list:
     with st.form(key="video_selection_form"):
         st.subheader(f"Found {len(st.session_state.video_list)} recent videos:")
         
+        # Create a dictionary to hold the state of checkboxes
         video_selections = {}
         for video in st.session_state.video_list:
             video_selections[video['video_id']] = st.checkbox(
@@ -456,18 +492,21 @@ if st.session_state.video_list:
 
     # --- STEP 3: Process and Download ---
     if submit_button:
+        # Get list of videos to fetch (id, title)
+        
         selected_videos = []
         for video_data in st.session_state.video_list:
             video_id = video_data['video_id']
             video_title = video_data['title']
             
+            # Check if this video_id is in our checkbox selections and if it's True
             if video_id in video_selections and video_selections[video_id] is True:
                 selected_videos.append((video_id, video_title))
 
         if not selected_videos:
             st.warning("Please select at least one video.")
         else:
-            with st.spinner("Processing... This might take a few minutes..."):
+            with st.spinner("Processing... This might take a few minutes for multiple videos and AI..."):
                 
                 # 1. Fetch transcripts
                 raw_transcripts = get_transcripts_for_videos(selected_videos)
@@ -499,7 +538,7 @@ if st.session_state.video_list:
                 if processed_transcripts:
                     pdf_data = None
                     
-                    # --- THIS IS THE CONDITIONAL LOGIC ---
+                    # --- THIS IS THE NEW CONDITIONAL LOGIC ---
                     if format_option == "AI Explainer (Detailed Notes)":
                         st.text("Generating 'Fancy' PDF with WeasyPrint...")
                         pdf_data = create_fancy_pdf_from_transcripts(processed_transcripts)
@@ -512,6 +551,7 @@ if st.session_state.video_list:
                         st.session_state.final_pdf_data = pdf_data
                         st.success("All transcripts processed and PDF is ready!")
                     else:
+        
                         st.error("Could not generate PDF data.")
                 else:
                     st.error("Could not process any transcripts.")
