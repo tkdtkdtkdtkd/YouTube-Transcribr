@@ -349,38 +349,33 @@ EXPLAINER_PROMPT = "make detailed points out of this, do not skip details and in
 
 
 def format_original_transcript(transcript_list):
-
     """
-
     Takes the raw transcript list and formats it into
-
-    4-snippet paragraphs.
-
+    4-snippet paragraphs. Handles both dicts and plain text.
     """
-
     cleaned_snippets = []
-
     for snippet in transcript_list:
+        # Handle case where snippet is a dict or string
+        if isinstance(snippet, dict) and 'text' in snippet:
+            text = snippet['text']
+        elif isinstance(snippet, str):
+            text = snippet
+        else:
+            # Skip weird data
+            continue
 
-        cleaned_text = clean_transcript_basic(snippet['text']) # Fixed: Use brackets for dict
-
+        cleaned_text = clean_transcript_basic(text)
         cleaned_snippets.append(cleaned_text)
 
-   
-
+    # Combine into paragraphs
     paragraphs = []
-
     chunk_size = 4
-
     for i in range(0, len(cleaned_snippets), chunk_size):
-
         chunk = cleaned_snippets[i:i + chunk_size]
-
         paragraphs.append(' '.join(chunk))
 
-   
-
     return '\n\n'.join(paragraphs)
+
 
 
 
