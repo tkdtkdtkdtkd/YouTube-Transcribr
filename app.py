@@ -177,9 +177,16 @@ def format_original_transcript(transcript_list):
     Takes the raw transcript list and formats it into
     a single, cleaned block of text.
     """
+    # 1. Get all text snippets
     all_text_snippets = [snippet['text'] for snippet in transcript_list]
+    
+    # 2. Join them all with a single space
     full_transcript = ' '.join(all_text_snippets)
+    
+    # 3. Clean the ENTIRE block at once
     cleaned_full_transcript = clean_transcript_basic(full_transcript)
+    
+    # 4. Return the single, continuous block of text.
     return cleaned_full_transcript
 
 
